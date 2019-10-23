@@ -81,7 +81,7 @@ def data_kinds():
     """
 
     return {'YEAR': 'Q', 'MONTH': 'Q', 'DAY': 'Q', 'DAY_OF_WEEK': 'Q', 'AIRLINE': 'N', 'FLIGHT_NUMBER': 'N',
-       'TAIL_NUMBER': 'N', 'ORIGIN_AIRPORT': 'N', 'DESTINATION_AIRPORT': 'N',
+       'TAIL_NUMBER': 'O', 'ORIGIN_AIRPORT': 'N', 'DESTINATION_AIRPORT': 'N',
        'SCHEDULED_DEPARTURE': 'Q', 'DEPARTURE_TIME': 'Q', 'DEPARTURE_DELAY': 'Q', 'TAXI_OUT': 'Q',
        'WHEELS_OFF': 'Q', 'SCHEDULED_TIME': 'Q', 'ELAPSED_TIME': 'Q', 'AIR_TIME': 'Q', 'DISTANCE': 'Q',
        'WHEELS_ON': 'Q', 'TAXI_IN': 'Q', 'SCHEDULED_ARRIVAL': 'Q', 'ARRIVAL_TIME': 'Q',
