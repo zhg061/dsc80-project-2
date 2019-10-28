@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import numpy as np
+from itertools import combinations
 
 
 # ---------------------------------------------------------------------
@@ -480,7 +481,16 @@ def prop_delayed_by_airline(jb_sw):
     True
     """
 
-    return ...
+    # Filter
+    airports = np.array(['ABQ', 'BDL', 'BUR', 'DCA', 'MSY', 'PBI', 'PHX', 'RNO', 'SJC', 'SLC'])
+    fil = jb_sw['ORIGIN_AIRPORT'].apply(lambda x : (x == airports).any())
+    filtered_jb_sw = jb_sw.loc[fil]
+
+    # Calculate the proportion
+    delayed = filtered_jb_sw['DEPARTURE_DELAY'] > 0
+    filtered_jb_sw = filtered_jb_sw.assign(delayed = delayed)
+
+    return filtered_jb_sw[['AIRLINE', 'delayed']].groupby('AIRLINE').mean()
 
 
 def prop_delayed_by_airline_airport(jb_sw):
@@ -504,8 +514,20 @@ def prop_delayed_by_airline_airport(jb_sw):
     >>> len(out.columns) == 6
     True
     """
+    # Filter
+    airports = np.array(['ABQ', 'BDL', 'BUR', 'DCA', 'MSY', 'PBI', 'PHX', 'RNO', 'SJC', 'SLC'])
+    fil = jb_sw['ORIGIN_AIRPORT'].apply(lambda x : (x == airports).any())
+    filtered_jb_sw = jb_sw.loc[fil]
 
-    return ...
+    # Calculate the proportion of each airport
+    delayed = filtered_jb_sw['DEPARTURE_DELAY'] > 0
+    filtered_jb_sw = (
+        filtered_jb_sw.assign(delayed = delayed)[['AIRLINE', 'ORIGIN_AIRPORT', 'delayed']]
+        .pivot_table(index='AIRLINE', columns='ORIGIN_AIRPORT', aggfunc='mean')
+    )
+    
+
+    return filtered_jb_sw
 
 
 # ---------------------------------------------------------------------
@@ -531,8 +553,22 @@ def verify_simpson(df, group1, group2, occur):
     >>> verify_simpson(df, 1, 2, 3)
     False
     """
+    tb1 = df[[group1, occur]].groupby(group1).mean()
+    tb2 = (
+        df.assign(occur = occur)
+        .pivot_table(index=group1, columns=group2, aggfunc='mean')
+    )
+    # print(tb1)
+    # print(tb2)
 
-    return ...
+    # For all
+    all_ = (tb1.diff().iloc[-1, :] < 0).all()
+    # print('all_: ' + str(all_))
+    # For separate => all < 0: True, else: False
+    sep_ = (tb2.diff().iloc[-1, :] < 0).all()
+    # print('sep_: ' + str(sep_))
+
+    return not (all_ == sep_)
 
 
 # ---------------------------------------------------------------------
@@ -555,8 +591,24 @@ def search_simpsons(jb_sw, N):
     >>> len(pair) == 2
     True
     """
+    # Filter
+    filter_ = jb_sw['ORIGIN_AIRPORT'].str.len() == 3
+    filtered_jb_sw = jb_sw[filter_]
 
-    return ...
+    # Compare 
+    delayed = (filtered_jb_sw['DEPARTURE_DELAY'] > 0) * 1
+    s_p = filtered_jb_sw.assign(delayed = delayed)[['AIRLINE', 'ORIGIN_AIRPORT', 'delayed']]
+    all_airports = s_p['ORIGIN_AIRPORT'].value_counts().index.tolist()
+    combs = list(combinations(all_airports, N))
+    s_p_ls = []
+    for comb in combs:
+        fil = s_p['ORIGIN_AIRPORT'].apply(lambda x : (x == np.array(comb)).any())
+        s_p_temp = s_p.loc[fil]
+        if verify_simpson(s_p_temp, 'AIRLINE', 'ORIGIN_AIRPORT', 'delayed'):
+            s_p_ls.append(comb)
+
+
+    return s_p_ls
 
 
 # ---------------------------------------------------------------------
