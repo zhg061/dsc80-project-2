@@ -311,7 +311,8 @@ def predict_null_arrival_delay(row):
     >>> set(out.unique()) - set([True, False]) == set()
     True
     """
-    return ...
+
+    return pd.isnull(row['ARRIVAL_TIME'])
 
 
 def predict_null_airline_delay(row):
@@ -332,7 +333,7 @@ def predict_null_airline_delay(row):
     True
     """
 
-    return ...
+    return pd.isnull(row['AIR_SYSTEM_DELAY'])
 
 
 # ---------------------------------------------------------------------
@@ -352,8 +353,25 @@ def perm4missing(flights, col, N):
     >>> 0 <= out <= 1
     True
     """
+    flights_dep = flights.assign(departure_delay_isnull = flights['DEPARTURE_DELAY'].isnull())[['departure_delay_isnull', col]]
+    distr = flights_dep.pivot_table(columns='departure_delay_isnull', index=col, aggfunc='size', fill_value=0).apply(lambda x: x / x.sum())
+    observed_tvd = np.sum(np.abs(distr.diff(axis=1).iloc[:,-1])) / 2
+    tvds = []
+    for _ in range(N):
+        airline_shuffled = (
+            flights_dep[col]
+            .sample(replace=False, frac=1)
+            .reset_index(drop=True)
+        )
+        flights_dep_shuffled = flights_dep.assign(airline_shuffled = airline_shuffled)
+        shuffled_distr = (flights_dep_shuffled
+                          .pivot_table(columns='departure_delay_isnull', index='airline_shuffled', aggfunc='size', fill_value=0)
+                          .apply(lambda x: x / x.sum()))
+        tvd = np.sum(np.abs(shuffled_distr.diff(axis=1).iloc[:,-1])) / 2
+        tvds.append(tvd)
+    p_val = np.count_nonzero(np.array(tvds) > observed_tvd) / N
 
-    return ...
+    return p_val
 
 
 def dependent_cols():
@@ -370,7 +388,7 @@ def dependent_cols():
     True
     """
 
-    return ...
+    return ['YEAR', 'DAY_OF_WEEK']
 
 
 def missing_types():
@@ -392,7 +410,7 @@ def missing_types():
     True
     """
 
-    return ...
+    return pd.Series([np.nan, 'MAR', np.nan, 'MD'], index=['CANCELLED', 'CANCELLATION_REASON', 'TAIL_NUMBER', 'ARRIVAL_TIME'])
 
 
 # ---------------------------------------------------------------------
