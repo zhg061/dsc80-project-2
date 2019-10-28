@@ -354,6 +354,7 @@ def predict_null_arrival_delay(row):
     >>> set(out.unique()) - set([True, False]) == set()
     True
     """
+
     return pd.isnull(row['ARRIVAL_TIME'])
 
 
