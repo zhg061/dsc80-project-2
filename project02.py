@@ -81,7 +81,7 @@ def data_kinds():
     True
     """
 
-    return {'YEAR': 'N',
+    return {'YEAR': 'Q',
             'MONTH': 'O',
             'DAY': 'O',
             'DAY_OF_WEEK': 'O',
@@ -96,7 +96,7 @@ def data_kinds():
             'TAXI_OUT': 'Q',
             'WHEELS_OFF': 'O',
             'SCHEDULED_TIME': 'Q',
-            'ELAPSED_TIME': 'Q',
+            'ELAPSED_TIME': 'O',
             'AIR_TIME': 'Q',
             'DISTANCE': 'Q',
             'WHEELS_ON': 'O',
@@ -355,7 +355,7 @@ def predict_null_arrival_delay(row):
     >>> set(out.unique()) - set([True, False]) == set()
     True
     """
-    return pd.isnull(row['ARRIVAL_TIME'])
+    return pd.isnull(row['ELAPSED_TIME'])
 
 
 def predict_null_airline_delay(row):
@@ -396,6 +396,7 @@ def perm4missing(flights, col, N):
     >>> 0 <= out <= 1
     True
     """
+
     flights_dep = flights.assign(departure_delay_isnull = flights['DEPARTURE_DELAY'].isnull())[['departure_delay_isnull', col]]
     distr = flights_dep.pivot_table(columns='departure_delay_isnull', index=col, aggfunc='size', fill_value=0).apply(lambda x: x / x.sum())
     observed_tvd = np.sum(np.abs(distr.diff(axis=1).iloc[:,-1])) / 2
@@ -430,8 +431,7 @@ def dependent_cols():
     >>> set(out) <= set(cols)
     True
     """
-
-    return ['YEAR', 'DAY_OF_WEEK']
+    return ['YEAR','DAY_OF_WEEK']
 
 
 def missing_types():
@@ -452,8 +452,7 @@ def missing_types():
     >>> set(out.unique()) - set(['MD', 'MCAR', 'MAR', 'MNAR', np.NaN]) == set()
     True
     """
-
-    return pd.Series([np.nan, 'MAR', np.nan, 'MD'], index=['CANCELLED', 'CANCELLATION_REASON', 'TAIL_NUMBER', 'ARRIVAL_TIME'])
+    return pd.Series([np.nan, 'MAR', 'MCAR', 'MD'], index=['CANCELLED', 'CANCELLATION_REASON', 'TAIL_NUMBER', 'ARRIVAL_TIME'])
 
 
 # ---------------------------------------------------------------------
@@ -480,14 +479,13 @@ def prop_delayed_by_airline(jb_sw):
     >>> len(out.columns) == 1
     True
     """
-
     # Filter
     airports = np.array(['ABQ', 'BDL', 'BUR', 'DCA', 'MSY', 'PBI', 'PHX', 'RNO', 'SJC', 'SLC'])
     fil = jb_sw['ORIGIN_AIRPORT'].apply(lambda x : (x == airports).any())
     filtered_jb_sw = jb_sw.loc[fil]
 
     # Calculate the proportion
-    delayed = filtered_jb_sw['DEPARTURE_DELAY'] > 0
+    delayed = (filtered_jb_sw['DEPARTURE_DELAY'] > 0) & (filtered_jb_sw['CANCELLED'] == 0)
     filtered_jb_sw = filtered_jb_sw.assign(delayed = delayed)
 
     return filtered_jb_sw[['AIRLINE', 'delayed']].groupby('AIRLINE').mean()
@@ -520,14 +518,18 @@ def prop_delayed_by_airline_airport(jb_sw):
     filtered_jb_sw = jb_sw.loc[fil]
 
     # Calculate the proportion of each airport
-    delayed = filtered_jb_sw['DEPARTURE_DELAY'] > 0
-    filtered_jb_sw = (
-        filtered_jb_sw.assign(delayed = delayed)[['AIRLINE', 'ORIGIN_AIRPORT', 'delayed']]
-        .pivot_table(index='AIRLINE', columns='ORIGIN_AIRPORT', aggfunc='mean')
+    delayed = (filtered_jb_sw['DEPARTURE_DELAY'] > 0) & (filtered_jb_sw['CANCELLED'] == 0)
+    pivot = filtered_jb_sw.pivot_table(
+    index = 'AIRLINE',
+    columns = 'ORIGIN_AIRPORT',
+    values = 'YEAR',
+    aggfunc = 'count'
     )
+    #changed
+    pivot = pivot.div(pivot.sum(1), 0)
     
 
-    return filtered_jb_sw
+    return pivot
 
 
 # ---------------------------------------------------------------------
@@ -553,22 +555,43 @@ def verify_simpson(df, group1, group2, occur):
     >>> verify_simpson(df, 1, 2, 3)
     False
     """
-    tb1 = df[[group1, occur]].groupby(group1).mean()
-    tb2 = (
-        df.assign(occur = occur)
-        .pivot_table(index=group1, columns=group2, aggfunc='mean')
+#     tb1 = df[[group1, occur]].groupby(group1).mean()
+#     tb2 = (
+#         df.assign(occur = occur)
+#         .pivot_table(index=group1, columns=group2, aggfunc='mean')
+#     )
+#     # print(tb1)
+#     # print(tb2)
+
+#     # For all
+#     all_ = (tb1.diff().iloc[-1, :] < 0).all()
+#     # print('all_: ' + str(all_))
+#     # For separate => all < 0: True, else: False
+#     sep_ = (tb2.diff().iloc[-1, :] < 0).all()
+#     # print('sep_: ' + str(sep_))
+
+#     return not (all_ == sep_)
+    aggre = df.pivot_table(
+        values = [occur],
+        index = group2,
+        columns = group1,
+        aggfunc = 'mean'
     )
-    # print(tb1)
-    # print(tb2)
+    origin = df.pivot_table(
+        columns = group1,
+        values = [occur],
+        aggfunc = 'mean'
+    )
+    aggre = aggre.fillna(0)
+    origin = origin.fillna(0)
+    original_value = (origin.diff(axis=1).iloc[:, -1] < 0).all()
+    aggre_value = (aggre.diff(axis=1).iloc[:, -1] < 0)
+    if aggre_value.sum() == aggre_value.shape[0] and original_value == False:
+        return True
+    elif original_value == True and aggre_value.sum() == 0:
+        return True
+    return False
 
-    # For all
-    all_ = (tb1.diff().iloc[-1, :] < 0).all()
-    # print('all_: ' + str(all_))
-    # For separate => all < 0: True, else: False
-    sep_ = (tb2.diff().iloc[-1, :] < 0).all()
-    # print('sep_: ' + str(sep_))
-
-    return not (all_ == sep_)
 
 
 # ---------------------------------------------------------------------
